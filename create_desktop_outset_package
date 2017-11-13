@@ -1,0 +1,117 @@
+#!/bin/bash
+
+### Variables
+
+ORGANIZATION=""
+IDENTIFIER=""
+
+function Usage() {
+cat <<-ENDOFMESSAGE
+
+Usage: $(basename "$0")
+    -w  --wallpaper location of the wallpaper you want to push out and create a profile for
+    -v  --version   version of the wallpaper (must increment if you want to overright previous)
+    -o  --output    directory to output packages to (defaults to current directory)
+    -h  --help      show this help text
+
+    create_desktop_outset_package packages an image to install into /Library/Desktop Pictures
+    and installs an outset login-once script to assign that wallpaper.
+
+ENDOFMESSAGE
+    exit 1
+}
+
+function Die() {
+    echo "$@"
+    Usage
+    exit 1
+}
+
+function GetOpts() {
+    argv=()
+    if [ "$#" -lt 1 ]; then
+      Die "You must specify the options."
+    fi
+    while [ "$#" -gt 0 ]
+    do
+        opt="$1"
+        shift
+        case "${opt}" in
+            -h|--help)
+                Usage;;
+            -w|--wallpaper)
+                if [ "$#" -eq 0 -o "${1:0:1}" = "-" ]; then
+                    Die "The ${opt} option requires an argument."
+                fi
+                wallpaper="$1"
+                shift
+                ;;
+            -v|--version)
+                if [ "$#" -eq 0 -o "${1:0:1}" = "-" ]; then
+                    Die "The ${opt} option requires an argument."
+                fi
+                version="$1"
+                shift
+                ;;
+            -o|--output)
+                if [ "$#" -eq 0 -o "${1:0:1}" = "-" ]; then
+                    Die "The ${opt} option requires an argument."
+                fi
+                output="$1"
+                shift
+                ;;
+            *)
+                if [ "${opt:0:1}" = "-" ]; then
+                    Die "${opt}: unknown option."
+                fi
+                argv+=(${opt});;
+        esac
+    done
+}
+
+GetOpts "$@"
+
+function OptCheck() {
+  if [[ "$1" == "" ]]; then
+    Die "You must specify all options."
+  fi
+}
+
+OptCheck "${wallpaper}"
+OptCheck "${version}"
+
+function CreateInstaller() {
+  outset_path="$(pwd)/set-wallpaper.sh"
+  wallpaper_path=${wallpaper}
+  echo "${wallpaper_path}"
+  current_dir=$(pwd)
+  if [[ "${output}" != "" ]]; then
+    cd "${output}"
+  fi
+  outset_filename="set-wallpaper.sh"
+  wallpaper_filename=$(basename "${wallpaper}")
+  wallpaper_name=${wallpaper_filename%.*}
+  output_dir=$(pwd)
+  temp_dir="${output_dir}"/temp
+
+  # create wallpaper directory for package
+  mkdir -p "${temp_dir}""/payload/Library/Desktop Pictures"
+  cp "${wallpaper_path}" "${temp_dir}""/payload/Library/Desktop Pictures/"
+  chmod 644 "${temp_dir}""/payload/Library/Desktop Pictures/""${wallpaper_filename}"
+
+  # create outset login-once directory for package
+  mkdir -p "${temp_dir}""/payload/usr/local/outset/login-once/"
+  cp "${outset_path}" "${temp_dir}""/payload/usr/local/outset/login-once/"
+  chmod 755 "${temp_dir}""/payload/usr/local/outset/login-once/""${outset_filename}"
+
+  # build wallpaper package
+  /usr/bin/pkgbuild --root "${temp_dir}""/payload/" --identifier "${IDENTIFIER}" --version "${version}" "${output_dir}"/"${wallpaper_name}"-"${version}".pkg
+
+
+	
+  # remove files
+  rm -Rf "${temp_dir}"
+  cd "${current_dir}"
+}
+
+CreateInstaller "${wallpaper}" "${version}" "${output}"
